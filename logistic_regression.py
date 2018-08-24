@@ -1,38 +1,26 @@
-import numpy as np
-from keras.models import Sequential
-from keras.layers import Dense
+import helpers
+import sys
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
+from keras.utils.np_utils import to_categorical
+
+log = helpers.get_logger()
+
+input_file = "./datasets/sample_input.csv"
+
+if (len(sys.argv) > 1 and sys.argv[1] == "experiment"):
+	input_file = "./datasets/pmc_optimal_cleaned.csv"
+
+log.info("Reading data from file")
+authors = helpers.read_field(input_file, "authors")
+labels = helpers.read_field(input_file, "5category")
+
+log.info("Converting features to integer sequences")
+tokenizer = Tokenizer(split=",", lower=True)
+tokenizer.fit_on_texts(authors)
+X = tokenizer.texts_to_sequences(authors)
+X = pad_sequences(X, maxlen=15, padding="post", truncating="post")
+# print(X)
 
 
-x_train = np.matrix([
-	[0, 1], 
-	[1, 0], 
-	[1, 0], 
-	[1, 0], 
-	[0, 1], 
-	[1, 0], 
-	[0, 1], 
-	[0, 1]
-])
-y_train = np.matrix([[
-	1, 0, 0, 0, 1, 0, 1, 1
-]])
 
-x_test = np.matrix([
-	[1, 0], 
-	[1, 0], 
-	[0, 1]
-])
-y_test = np.matrix([[
-	0, 0, 1
-]])
-
-print x_train.shape
-model = Sequential()
-out_dim = 1
-input_dim = x_train.shape[1]
-model.add(Dense(out_dim, activation='sigmoid', input_shape=input_dim))
-model.compile(optimizer='rmsprop', loss='binary_crossentropy')
-model.fit(x_train, y_train, epochs=10, validation_data=(x_test, y_test))
-score = model.evaluate(x_test, y_test, verbose=0) 
-print('Test score:', score[0]) 
-print('Test accuracy:', score[1])
