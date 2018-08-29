@@ -1,7 +1,7 @@
 import logging
 import pandas as pd 
 
-def get_logger():
+def get_logger(to_file=False):
 	# create logger with 'spam_application'
 	log = logging.getLogger('neural app')
 	log.setLevel(logging.DEBUG)
@@ -10,10 +10,10 @@ def get_logger():
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
 	# create file handler which logs even debug messages
-	fh = logging.StreamHandler()
-
-	# uncomment below to redirect logs to file
-	# fh = logging.FileHandler('spam.log')
+	if (to_file == False):
+		fh = logging.StreamHandler()
+	else: 
+		fh = logging.FileHandler('regression.log')
 
 	fh.setLevel(logging.DEBUG)
 	fh.setFormatter(formatter)
