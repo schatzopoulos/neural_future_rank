@@ -10,11 +10,15 @@ from keras.layers.embeddings import Embedding
 from sklearn.preprocessing import LabelEncoder
 from keras.utils import to_categorical
 from sklearn.utils import class_weight
+from sklearn.model_selection import StratifiedKFold
 
 _max_authorlist_length = 20
 _embedding_size = 8
-_epochs = 100
-_verbose = True
+_epochs = 50
+_verbose = False
+_seed = 7
+
+np.random.seed(_seed)
 
 encoder = LabelEncoder()
 
@@ -36,8 +40,7 @@ def define_model(vocab_size, embedding_size, max_authorlist_length):
 	model = Sequential()
 	model.add(Embedding(vocab_size, embedding_size, mask_zero=False, input_length=max_authorlist_length))
 	model.add(Flatten())
-	model.add(Dense(6, activation='sigmoid'))
-	model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+	model.add(Dense(6, activation='softmax'))
 	return model
 
 def compute_weights(y):
@@ -64,6 +67,7 @@ def load_from_file(filename="model.json"):
 	loaded_model_json = json_file.read()
 	json_file.close()
 	loaded_model = model_from_json(loaded_model_json)
+
 	# load weights into new model
 	loaded_model.load_weights("model.h5")
 
@@ -75,33 +79,44 @@ if (len(sys.argv) > 1 and sys.argv[1] == "experiment"):
 
 log.info("Reading data from file")
 authors = helpers.read_field(input_file, "authors")
-labels = helpers.read_field(input_file, "5category")
+Y = helpers.read_field(input_file, "5category")
+
+# compute weights for each class / imbalanced data
+class_weights = compute_weights(Y)
 
 log.info("Converting features to integer sequences")
 (X, vocab_size) = convert_to_sequences(authors)
-Y = to_categorical(labels)
 
-log.info("Building the model")
-model = define_model(vocab_size, _embedding_size, _max_authorlist_length)
+kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=_seed)
+cvscores = []
 
-class_weights = compute_weights(labels)
+epoch = 0
+for train, test in kfold.split(X, Y):
+	print("Epoch", epoch)
+	epoch += 1
 
-if (_verbose == True):
-	model.summary()
-	log.info("Class weights:")
-	log.info(class_weights)
+  	# Create model
+	log.info("Building the model")
+	model = define_model(vocab_size, _embedding_size, _max_authorlist_length)
 
-log.info("Fitting the model")
-model.fit(X, Y, epochs=_epochs, verbose=_verbose)
+	# Compile model
+	model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
-write_to_file(model)
+	# Fit the model
+	if (_verbose == True):
+		model.summary()
+		log.info("Class weights:")
+		log.info(class_weights)
 
-log.info("Evaluating the model")
-loss, accuracy = model.evaluate(X, Y, verbose=_verbose)
+	log.info("Fitting the model")
+	model.fit(X[train], to_categorical(Y[train]), epochs=_epochs, verbose=_verbose, class_weight=class_weights)
 
-log.info('Accuracy: %f' % (accuracy*100))
-log.info('Loss: %f' % loss)
+	# evaluate the model
+	log.info("Evaluating the model")
+	scores = model.evaluate(X[test], to_categorical(Y[test]), verbose=_verbose)
 
+	print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+	cvscores.append(scores[1] * 100)
+	print()
 
-
-
+print("%.2f%% (+/- %.2f%%)" % (np.mean(cvscores), np.std(cvscores)))
